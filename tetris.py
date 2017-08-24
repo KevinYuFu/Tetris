@@ -1,17 +1,27 @@
 import pygame
+import Queue
+import math
+from random import randint
 import numpy as np
 
 Black = (0, 0, 0)
 
-Colour = { 0 : (150, 150, 150),
-           1 : (0, 150, 150),
-           2 : (150, 150, 0),
-           3 : (150, 0, 0),
-           4 : (0, 150, 0),
-           5 : (200, 130, 0),
-           6 : (0, 0, 150),
-           7 : (150, 0, 150) }
-Empty = (150, 150, 150)
+Colour = { 0 : (150, 150, 150), # None
+           1 : (0, 150, 150),   # I
+           2 : (150, 150, 0),   # O
+           3 : (150, 0, 0),     # Z
+           4 : (0, 150, 0),     # S
+           5 : (200, 130, 0),   # L
+           6 : (0, 0, 150),     # J
+           7 : (150, 0, 150) }  # T
+
+TPieceCoord = { 1 : np.array([ (0, -1), (0, 0), (0, 1), (0, 2)]), # I
+                2 : np.array([ (0, 0), (1, 0), (0, 1), (1, 1)]),  # O
+                3 : np.array([ (-1, 0), (0, 0), (0, 1), (1, 1)]),  # Z
+                4 : np.array([ (-1, 1), (0, 1), (0, 0), (1, 0)]),  # S
+                5 : np.array([ (0, -1), (0, 0), (0, 1), (1, 1)]),  # L
+                6 : np.array([ (0, -1), (0, 0), (0, 1), (-1, 1)]),  # J
+                7 : np.array([ (-1, 0), (0, 0), (1, 0), (0, -1)]) } # T
 
 #Line block:
 # O
@@ -59,13 +69,46 @@ jBlock = 6
 Purple = (150, 0, 150)
 tBlock = 7
 
+class TetrisPiece():
+    def __init__(self, grid):
+        self.type = randint(1, 7)
+        self.grid = grid
+        self.center = np.array([int(math.floor(grid.width/2)), grid.height - 1])
+        self.blocks = self.generatePieces()
+        self.fitInGrid()
 
-class tetrisGrid():
+    def generatePieces(self):
+        return TPieceCoord[self.type] + self.center
+
+    def fitInGrid(self):
+        yOutBound = self.grid.height - 1
+        for block in self.blocks:
+            if block[1] > yOutBound:
+                yOutBound = block[1]
+
+        yShift = yOutBound - self.grid.height + 1
+
+        if yShift != 0:
+            self.blocks -= (0, yShift)
+            self.center -= (0, yShift)
+
+    def movePiece(direction):
+        self.blocks += direction
+        self.center += direction
+
+    def draw(self, screen):
+        for block in self.blocks:
+            self.grid.drawBlock(screen, block[0], block[1], self.type)
+
+class TetrisGrid():
     def __init__(self, screen):
         self.size = 20
         self.height = 20
         self.width = 10
+
         self.cells = []
+        self.activePiece = TetrisPiece(self) #None
+        self.pieceQueue = Queue.Queue()
 
         screenWidth, screenHeight = pygame.display.get_surface().get_size()
         self.xOffset = (screenWidth - self.width * self.size) / 2
@@ -101,6 +144,7 @@ class tetrisGrid():
 
     def draw(self, screen):
         self.drawBlocks(screen)
+        self.activePiece.draw(screen)
         self.drawGrid(screen)
 
 class Game(object):
@@ -112,7 +156,7 @@ class Game(object):
         pygame.display.flip()
         
     def main(self, screen):
-        self.grid = tetrisGrid(screen)
+        self.grid = TetrisGrid(screen)
 
         while 1:
             clock = pygame.time.Clock()
