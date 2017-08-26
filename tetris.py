@@ -15,89 +15,139 @@ Colour = { 0 : (150, 150, 150), # None
            6 : (0, 0, 150),     # J
            7 : (150, 0, 150) }  # T
 
-TPieceCoord = { 1 : np.array([ (0, -1), (0, 0), (0, 1), (0, 2)]), # I
-                2 : np.array([ (0, 0), (1, 0), (0, 1), (1, 1)]),  # O
-                3 : np.array([ (-1, 0), (0, 0), (0, 1), (1, 1)]),  # Z
-                4 : np.array([ (-1, 1), (0, 1), (0, 0), (1, 0)]),  # S
-                5 : np.array([ (0, -1), (0, 0), (0, 1), (1, 1)]),  # L
-                6 : np.array([ (0, -1), (0, 0), (0, 1), (-1, 1)]),  # J
+TPieceCoord = { 1 : np.array([ (-1, 0), (0, 0), (1, 0), (2, 0)]), # I
+                2 : np.array([ (0, -1), (1, -1), (0, 0), (1, 0)]),  # O
+                3 : np.array([ (-1, 0), (0, 0), (0, -1), (1, -1)]),  # Z
+                4 : np.array([ (-1, -1), (0, -1), (0, 0), (1, 0)]),  # S
+                5 : np.array([ (-1, 0), (0, 0), (1, 0), (1, 1)]),  # L
+                6 : np.array([ (-1, 1), (-1, 0), (0, 0), (1, 0)]),  # J
                 7 : np.array([ (-1, 0), (0, 0), (1, 0), (0, -1)]) } # T
 
-#Line block:
-# O
-# O
-# O
-# O
-Teal = (0, 150, 150)
-iBlock = 1
+class TPieceControler():
+    def __init__(self, tPiece = None):
+        self.leftHeld = False
+        self.rightHeld = False
+        self.upHeld = False
+        self.downHeld = False
+        self.tPiece = tPiece
 
-# Square block:
-# OO
-# OO
-Yellow = (150, 150, 0)
-oBlock = 2
+    def changePiece(self,tPiece):
+        self.tPiece = tPiece
 
-# Z block:
-# OO
-#  OO
-Red = (150, 0, 0)
-zBlock = 3
+    def recieveInput(self):
+        if self.tPiece is not None:
+            key = pygame.key.get_pressed()
+            if key[pygame.K_LEFT]:
+                if self.leftHeld == False:
+                    self.tPiece.movePiece((-1, 0))
+                    self.leftHeld = True
+            else:
+                self.leftHeld = False
 
-# S block:
-#  OO
-# OO
-Grean = (0, 150, 0)
-sBlock = 4
+            if key[pygame.K_RIGHT]:
+                if self.rightHeld == False:
+                    self.tPiece.movePiece((1, 0))
+                    self.rightHeld = True
+            else:
+                self.rightHeld = False
 
-# L block:
-# O
-# O
-# OO
-Orange = (200, 130, 0)
-lBlock = 5
+            if key[pygame.K_UP]:
+                if self.upHeld == False:
+                    self.tPiece.rotate()
+                    self.upHeld = True
+            else:
+                self.upHeld = False
 
-# J block:
-#  O
-#  O
-# OO
-Blue = (0, 0, 150)
-jBlock = 6
-
-# T Block:
-#  O
-# OOO
-Purple = (150, 0, 150)
-tBlock = 7
+            if key[pygame.K_DOWN]:
+                if self.downHeld == False:
+                    self.tPiece.movePiece((0, -1))
+                    self.downHeld = True
+            else:
+                self.downHeld = False
 
 class TetrisPiece():
     def __init__(self, grid):
         self.type = randint(1, 7)
         self.grid = grid
-        self.center = np.array([int(math.floor(grid.width/2)), grid.height - 1])
-        self.blocks = self.generatePieces()
-        self.fitInGrid()
 
-    def generatePieces(self):
-        return TPieceCoord[self.type] + self.center
+        beginningHeight = grid.height - 1
+        gridCenter = int(math.floor(grid.width/2))
+        if self.type in (5, 6):
+            beginningHeight -= 1
+        self.center = np.array([gridCenter, beginningHeight])
 
-    def fitInGrid(self):
-        yOutBound = self.grid.height - 1
-        for block in self.blocks:
-            if block[1] > yOutBound:
-                yOutBound = block[1]
+        self.blocks = TPieceCoord[self.type]
 
-        yShift = yOutBound - self.grid.height + 1
+        self.readyToPlace = False
 
-        if yShift != 0:
-            self.blocks -= (0, yShift)
-            self.center -= (0, yShift)
+    def coord(self):
+        return self.blocks + self.center
 
-    def movePiece(direction):
-        self.blocks += direction
-        self.center += direction
+    def movePiece(self, direction):
+        height = self.grid.height
+        width = self.grid.width
+
+        tempCenter = self.center + direction
+        fix = self.enclose(tempCenter)
+        if fix == (0, 0):
+            self.center = tempCenter
+
+        if fix[1] == -1:
+            if self.readyToPlace:
+                self.grid.placePiece()
+            else:
+                self.readyToPlace = True
+
+    def rotate(self):
+        for i in range(0, 4):
+            x, y = self.blocks[i]
+            self.blocks[i] = np.array([y, -x])
+        fix = self.enclose()
+        self.center -= fix
+        self.readyToPlace = False
+
+
+    def enclose(self, center = None):
+        xMax = None
+        xMin = None
+        yMax = None
+        yMin = None
+        if center is None:
+            center = self.center
+        piece = self.blocks + center
+        for block in piece:
+            if xMax is None:
+                xMax = block[0]
+                xMin = block[0]
+                yMax = block[1]
+                yMin = block[1]
+            else:
+                if block[0] > xMax:
+                    xMax = block[0]
+                elif block[0] < xMin:
+                    xMin = block[0]
+                if block[1] > yMax:
+                    yMax = block[1]
+                elif block[1] < yMin:
+                    yMin = block[1]
+        if xMax >= self.grid.width:
+            x = xMax - self.grid.width + 1
+        elif xMin < 0:
+            x = xMin
+        else:
+            x = 0
+        if yMax >= self.grid.height:
+            y = yMax - self.grid.height + 1
+        elif yMin < 0:
+            y = yMin
+        else:
+            y = 0
+        return (x, y)
+
 
     def draw(self, screen):
-        for block in self.blocks:
+        piece = self.center + self.blocks
+        for block in piece:
             self.grid.drawBlock(screen, block[0], block[1], self.type)
 
 class TetrisGrid():
@@ -106,8 +156,11 @@ class TetrisGrid():
         self.height = 20
         self.width = 10
 
+        self.controller = TPieceControler()
+
         self.cells = []
-        self.activePiece = TetrisPiece(self) #None
+        self.activePiece = TetrisPiece(self)
+        self.controller.changePiece(self.activePiece)
         self.pieceQueue = Queue.Queue()
 
         screenWidth, screenHeight = pygame.display.get_surface().get_size()
@@ -116,6 +169,27 @@ class TetrisGrid():
 
     def realCoord(self, x, y):
         return (x * self.size + self.xOffset, y * self.size + self.yOffset)
+
+    def placePiece(self):
+        blocks = self.activePiece.coord()
+        cellCol = self.activePiece.type
+        topHeight = len(self.cells)
+
+        for block in blocks:
+            x, y = block
+            
+            if y >= topHeight:
+                extraHeight = y - topHeight + 1
+                topHeight += extraHeight
+                for i in range(0, extraHeight):
+                    self.cells.append(np.zeros(self.width, dtype = np.int))
+
+            self.cells[y][x] = cellCol
+
+        self.activePiece = TetrisPiece(self)
+        self.controller.changePiece(self.activePiece)
+
+        
 
     def drawGrid(self, screen):
         for y in range(0, self.height + 1):
@@ -140,7 +214,10 @@ class TetrisGrid():
         block = pygame.rect.Rect(self.realCoord(x, y),(self.size, self.size))
         pygame.draw.rect(screen, Colour[col], block, 0)
 
-
+    def update(self, gameTick = False):
+        self.controller.recieveInput()
+        if gameTick:
+            self.activePiece.movePiece((0, -1))
 
     def draw(self, screen):
         self.drawBlocks(screen)
@@ -148,15 +225,19 @@ class TetrisGrid():
         self.drawGrid(screen)
 
 class Game(object):
-    #def __init__(self):
 
     def draw(self, screen):
         screen.fill((200, 200, 200))
         self.grid.draw(screen)
         pygame.display.flip()
+
+    def update(self, gameTick = False):
+        self.grid.update(gameTick)
         
     def main(self, screen):
         self.grid = TetrisGrid(screen)
+        gameSpeed = 15
+        gameTick = gameSpeed
 
         while 1:
             clock = pygame.time.Clock()
@@ -168,6 +249,13 @@ class Game(object):
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                     return
             self.draw(screen)
+            if gameTick == 0:
+                self.update(True)
+                gameTick = gameSpeed
+            else:
+                self.update()
+
+            gameTick -= 1
 
 if __name__ == '__main__':
     pygame.init()
