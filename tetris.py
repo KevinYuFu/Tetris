@@ -15,13 +15,13 @@ Colour = { 0 : (150, 150, 150), # None
            6 : (0, 0, 150),     # J
            7 : (150, 0, 150) }  # T
 
-TPieceCoord = { 1 : np.array([ (-1, 0), (0, 0), (1, 0), (2, 0)]), # I
-                2 : np.array([ (0, -1), (1, -1), (0, 0), (1, 0)]),  # O
-                3 : np.array([ (-1, 0), (0, 0), (0, -1), (1, -1)]),  # Z
-                4 : np.array([ (-1, -1), (0, -1), (0, 0), (1, 0)]),  # S
-                5 : np.array([ (-1, 0), (0, 0), (1, 0), (1, 1)]),  # L
-                6 : np.array([ (-1, 1), (-1, 0), (0, 0), (1, 0)]),  # J
-                7 : np.array([ (-1, 0), (0, 0), (1, 0), (0, -1)]) } # T
+TPieceCoord = { 1 : ((-1, 0), (0, 0), (1, 0), (2, 0)), # I
+                2 : ((0, -1), (1, -1), (0, 0), (1, 0)),  # O
+                3 : ((-1, 0), (0, 0), (0, -1), (1, -1)),  # Z
+                4 : ((-1, -1), (0, -1), (0, 0), (1, 0)),  # S
+                5 : ((-1, 0), (0, 0), (1, 0), (1, 1)),  # L
+                6 : ((-1, 1), (-1, 0), (0, 0), (1, 0)),  # J
+                7 : ((-1, 0), (0, 0), (1, 0), (0, -1)) } # T
 
 class TPieceControler():
     def __init__(self, tPiece = None):
@@ -76,7 +76,7 @@ class TetrisPiece():
             beginningHeight -= 1
         self.center = np.array([gridCenter, beginningHeight])
 
-        self.blocks = TPieceCoord[self.type]
+        self.blocks = np.asarray(TPieceCoord[self.type])
 
         self.readyToPlace = False
 
@@ -89,10 +89,9 @@ class TetrisPiece():
 
         tempCenter = self.center + direction
         fix = self.enclose(tempCenter)
-        if fix == (0, 0):
+        if fix == (0, 0) and self.grid.piecePlaceable(tempCenter + self.blocks):
             self.center = tempCenter
-
-        if fix[1] == -1:
+        elif direction == (0, -1):
             if self.readyToPlace:
                 self.grid.placePiece()
             else:
@@ -186,9 +185,36 @@ class TetrisGrid():
 
             self.cells[y][x] = cellCol
 
+        self.clearFullRows()
+
         self.activePiece = TetrisPiece(self)
         self.controller.changePiece(self.activePiece)
 
+    def clearFullRows(self):
+        y = 0
+        topHeight = len(self.cells)
+        while y < topHeight:
+            delete = True
+            for n in self.cells[y]:
+                if n == 0:
+                    delete = False
+                    break
+
+            if delete:
+               del self.cells[y] 
+               topHeight -= 1
+            else:
+                y += 1
+
+
+
+    def piecePlaceable(self, blocks):
+        topHeight = len(self.cells)
+        for block in blocks:
+            x, y = block
+            if y < topHeight and self.cells[y][x] != 0:
+                return False
+        return True
         
 
     def drawGrid(self, screen):
