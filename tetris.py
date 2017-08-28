@@ -6,14 +6,22 @@ import numpy as np
 
 Black = (0, 0, 0)
 
-Colour = { 0 : (150, 150, 150), # None
-           1 : (0, 150, 150),   # I
-           2 : (150, 150, 0),   # O
-           3 : (150, 0, 0),     # Z
-           4 : (0, 150, 0),     # S
-           5 : (200, 130, 0),   # L
-           6 : (0, 0, 150),     # J
-           7 : (150, 0, 150) }  # T
+Colour = { 0 : (200, 200, 200), # None
+           1 : (0, 200, 200),   # I
+           2 : (200, 200, 0),   # O
+           3 : (200, 0, 0),     # Z
+           4 : (0, 200, 0),     # S
+           5 : (250, 160, 0),   # L
+           6 : (0, 0, 200),     # J
+           7 : (200, 0, 200),   # T
+
+           8 : (100, 150, 150),   # I Ghost
+           9 : (150, 150, 100),   # O Ghost
+           10 : (150, 100, 100),    # Z Ghost
+           11 : (100, 150, 100),    # S Ghost
+           12 : (200, 130, 100),  # L Ghost
+           13 : (100, 100, 150),    # J Ghost
+           14 : (150, 100, 150) } # T Ghost
 
 TPieceCoord = { 1 : ((-1, 0), (0, 0), (1, 0), (2, 0)), # I
                 2 : ((0, -1), (1, -1), (0, 0), (1, 0)),  # O
@@ -29,6 +37,8 @@ class TPieceControler():
         self.rightHeld = False
         self.upHeld = False
         self.downHeld = False
+        self.spaceHeld = False
+        self.cHeld = False
         self.tPiece = tPiece
 
     def changePiece(self,tPiece):
@@ -62,8 +72,18 @@ class TPieceControler():
                 if self.downHeld == False:
                     self.tPiece.movePiece((0, -1))
                     self.downHeld = True
+                else:
+                    self.downHeld = False
             else:
                 self.downHeld = False
+
+            if key[pygame.K_SPACE]:
+                if self.spaceHeld == False:
+                    self.tPiece.center = self.tPiece.ghostCenter
+                    self.tPiece.grid.placePiece()
+                    self.spaceHeld = True
+            else:
+                self.spaceHeld = False
 
 class TetrisPiece():
     def __init__(self, grid):
@@ -77,20 +97,40 @@ class TetrisPiece():
         self.center = np.array([gridCenter, beginningHeight])
 
         self.blocks = np.asarray(TPieceCoord[self.type])
+        self.ghostCenter = self.calcGhostPiece()
 
         self.readyToPlace = False
 
-    def coord(self):
-        return self.blocks + self.center
-
+    def calcGhostPiece(self):
+        x, y = self.center
+        while 1:
+            tempGhost = self.blocks + (x, y)
+            for block in tempGhost:
+                if self.grid.blockOverlap(block):
+                    return (x, y + 1)
+            y -= 1
+        
     def movePiece(self, direction):
         height = self.grid.height
         width = self.grid.width
 
         tempCenter = self.center + direction
+
         fix = self.enclose(tempCenter)
-        if fix == (0, 0) and self.grid.piecePlaceable(tempCenter + self.blocks):
+        tempBlocks = tempCenter + self.blocks
+
+        validPosition = True
+        if fix == (0, 0):
+            for block in tempBlocks:
+                if  self.grid.blockOverlap(block):
+                    validPosition = False
+                    break
+        else:
+            validPosition = False
+
+        if validPosition:
             self.center = tempCenter
+            self.ghostCenter = self.calcGhostPiece()
         elif direction == (0, -1):
             if self.readyToPlace:
                 self.grid.placePiece()
@@ -103,8 +143,8 @@ class TetrisPiece():
             self.blocks[i] = np.array([y, -x])
         fix = self.enclose()
         self.center -= fix
+        self.ghostCenter = self.calcGhostPiece()
         self.readyToPlace = False
-
 
     def enclose(self, center = None):
         xMax = None
@@ -146,6 +186,11 @@ class TetrisPiece():
 
     def draw(self, screen):
         piece = self.center + self.blocks
+        ghostPiece = self.ghostCenter + self.blocks
+
+        for block in ghostPiece:
+            self.grid.drawBlock(screen, block[0], block[1], self.type + 7)
+
         for block in piece:
             self.grid.drawBlock(screen, block[0], block[1], self.type)
 
@@ -170,7 +215,7 @@ class TetrisGrid():
         return (x * self.size + self.xOffset, y * self.size + self.yOffset)
 
     def placePiece(self):
-        blocks = self.activePiece.coord()
+        blocks = self.activePiece.center + self.activePiece.blocks
         cellCol = self.activePiece.type
         topHeight = len(self.cells)
 
@@ -206,16 +251,14 @@ class TetrisGrid():
             else:
                 y += 1
 
-
-
-    def piecePlaceable(self, blocks):
+    def blockOverlap(self, block):
         topHeight = len(self.cells)
-        for block in blocks:
-            x, y = block
-            if y < topHeight and self.cells[y][x] != 0:
-                return False
-        return True
-        
+        x, y = block
+        if y < 0:
+            return True
+        if y < topHeight and self.cells[y][x] != 0:
+            return True
+        return False
 
     def drawGrid(self, screen):
         for y in range(0, self.height + 1):
@@ -251,7 +294,6 @@ class TetrisGrid():
         self.drawGrid(screen)
 
 class Game(object):
-
     def draw(self, screen):
         screen.fill((200, 200, 200))
         self.grid.draw(screen)
