@@ -1,6 +1,6 @@
 import pygame
-import Queue
 import math
+from collections import deque
 from random import randint
 import numpy as np
 
@@ -23,22 +23,31 @@ Colour = { 0 : (200, 200, 200), # None
            13 : (100, 100, 150),    # J Ghost
            14 : (150, 100, 150) } # T Ghost
 
-TPieceCoord = { 1 : ((-1, 0), (0, 0), (1, 0), (2, 0)), # I
-                2 : ((0, -1), (1, -1), (0, 0), (1, 0)),  # O
-                3 : ((-1, 0), (0, 0), (0, -1), (1, -1)),  # Z
-                4 : ((-1, -1), (0, -1), (0, 0), (1, 0)),  # S
-                5 : ((-1, 0), (0, 0), (1, 0), (1, 1)),  # L
-                6 : ((-1, 1), (-1, 0), (0, 0), (1, 0)),  # J
-                7 : ((-1, 0), (0, 0), (1, 0), (0, -1)) } # T
+TPieceCoord = { 1 : ((-1, 0), (0, 0), (1, 0), (2, 0)),      # I
+                2 : ((0, -1), (1, -1), (0, 0), (1, 0)),     # O
+                3 : ((-1, 0), (0, 0), (0, -1), (1, -1)),    # Z
+                4 : ((-1, -1), (0, -1), (0, 0), (1, 0)),    # S
+                5 : ((-1, 0), (0, 0), (1, 0), (1, 1)),      # L
+                6 : ((-1, 1), (-1, 0), (0, 0), (1, 0)),     # J
+                7 : ((-1, 0), (0, 0), (1, 0), (0, -1)) }    # T
+
+TPieceFrameCoord = { 1 : TPieceCoord[1] + np.array((1, 1.5)),     # I
+                     2 : TPieceCoord[2] + np.array((1, 2)),       # O
+                     3 : TPieceCoord[3] + np.array((1.5, 2)),     # Z
+                     4 : TPieceCoord[4] + np.array((1.5, 2)),     # S
+                     5 : TPieceCoord[5] + np.array((1.5, 1)),     # L
+                     6 : TPieceCoord[6] + np.array((1.5, 1)),     # J
+                     7 : TPieceCoord[7] + np.array((1.5, 2)) }    # T
 
 class TPieceControler():
-    def __init__(self, tPiece = None):
+    def __init__(self, grid, tPiece = None):
         self.leftHeld = False
         self.rightHeld = False
         self.upHeld = False
         self.downHeld = False
         self.spaceHeld = False
         self.cHeld = False
+        self.grid = grid
         self.tPiece = tPiece
 
     def changePiece(self,tPiece):
@@ -85,9 +94,15 @@ class TPieceControler():
             else:
                 self.spaceHeld = False
 
+            if key[pygame.K_c]:
+                self.grid.swapHold()
+
 class TetrisPiece():
-    def __init__(self, grid):
-        self.type = randint(1, 7)
+    def __init__(self, grid, pType = None):
+        if pType is None:
+            self.type = randint(1, 7)
+        else:
+            self.type = pType
         self.grid = grid
 
         beginningHeight = grid.height - 1
@@ -199,20 +214,31 @@ class TetrisGrid():
         self.size = 20
         self.height = 20
         self.width = 10
-
-        self.controller = TPieceControler()
-
         self.cells = []
-        self.activePiece = TetrisPiece(self)
-        self.controller.changePiece(self.activePiece)
-        self.pieceQueue = Queue.Queue()
+
+        self.controller = TPieceControler(self)
+
+        self.heldPiece = None
+        self.pieceQueue = deque()
+        for i in range(5):
+            self.pieceQueue.append(randint(1, 7))
+        self.nextPiece()
 
         screenWidth, screenHeight = pygame.display.get_surface().get_size()
         self.xOffset = (screenWidth - self.width * self.size) / 2
         self.yOffset = (screenHeight - self.height * self.size) / 2
 
-    def realCoord(self, x, y):
-        return (x * self.size + self.xOffset, y * self.size + self.yOffset)
+    def nextPiece(self):
+        self.activePiece = TetrisPiece(self, self.pieceQueue.popleft())
+        self.pieceQueue.append(randint(1, 7))
+        self.controller.changePiece(self.activePiece)
+
+    def swapHold(self):
+        self.activePiece, self.heldPiece = TetrisPiece(self, self.heldPiece), self.activePiece.type
+        if self.activePiece is None:
+            self.activePiece = self.nextPiece()
+        else:
+            self.controller.changePiece(self.activePiece) # This is a smell
 
     def placePiece(self):
         blocks = self.activePiece.center + self.activePiece.blocks
@@ -232,8 +258,9 @@ class TetrisGrid():
 
         self.clearFullRows()
 
-        self.activePiece = TetrisPiece(self)
-        self.controller.changePiece(self.activePiece)
+        #self.activePiece = TetrisPiece(self)
+        #self.controller.changePiece(self.activePiece)
+        self.nextPiece()
 
     def clearFullRows(self):
         y = 0
@@ -260,11 +287,30 @@ class TetrisGrid():
             return True
         return False
 
+    def update(self, gameTick = False):
+        self.controller.recieveInput()
+        if gameTick:
+            self.activePiece.movePiece((0, -1))
+
+    def realCoord(self, x, y):
+        return (x * self.size + self.xOffset, y * self.size + self.yOffset)
+
     def drawGrid(self, screen):
+        # Main Grid
         for y in range(0, self.height + 1):
             pygame.draw.line(screen, Black, self.realCoord(0, y), self.realCoord(self.width, y))
         for x in range(0, self.width + 1):
             pygame.draw.line(screen, Black, self.realCoord(x, 0), self.realCoord(x, self.height))
+
+        # Held Frame
+        frameSize = 4 * self.size
+        heldFrame = pygame.rect.Rect(self.realCoord(-5, 0), (frameSize, frameSize))
+        pygame.draw.rect(screen, Black, heldFrame, 1)
+
+        # Queue Frame
+        for i in range(5):
+            queueFrame = pygame.rect.Rect(self.realCoord(self.width + 1, 4 * i), (frameSize, frameSize))
+            pygame.draw.rect(screen, Black, queueFrame, 1)
 
     def drawBlocks(self, screen):
         h = 0
@@ -283,14 +329,29 @@ class TetrisGrid():
         block = pygame.rect.Rect(self.realCoord(x, y),(self.size, self.size))
         pygame.draw.rect(screen, Colour[col], block, 0)
 
-    def update(self, gameTick = False):
-        self.controller.recieveInput()
-        if gameTick:
-            self.activePiece.movePiece((0, -1))
+    def drawFramePiece(self, screen, leftCorner, pType):
+        framePiece = TPieceFrameCoord[pType] + leftCorner
+        for block in framePiece:
+            x, y = block
+            blockRect = pygame.rect.Rect(self.realCoord(x, y), (self.size, self.size))
+            pygame.draw.rect(screen, Colour[pType], blockRect, 0)
+            pygame.draw.rect(screen, Black, blockRect, 1)
+
+    def drawQueuedPieces(self, screen):
+        # Draw Held Piece
+        if self.heldPiece is not None:
+            self.drawFramePiece(screen, (-5, 0), self.heldPiece)
+
+        # Draw Queue
+        for i, pType in enumerate(self.pieceQueue):
+            self.drawFramePiece(screen, (self.width + 1, 4 * i), pType)
 
     def draw(self, screen):
         self.drawBlocks(screen)
         self.activePiece.draw(screen)
+
+        self.drawQueuedPieces(screen)
+
         self.drawGrid(screen)
 
 class Game(object):
