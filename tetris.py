@@ -47,11 +47,13 @@ class TPieceControler():
         self.downHeld = False
         self.spaceHeld = False
         self.cHeld = False
+        self.swap = False
         self.grid = grid
         self.tPiece = tPiece
 
     def changePiece(self,tPiece):
         self.tPiece = tPiece
+        self.swap = False
 
     def recieveInput(self):
         if self.tPiece is not None:
@@ -95,7 +97,10 @@ class TPieceControler():
                 self.spaceHeld = False
 
             if key[pygame.K_c]:
-                self.grid.swapHold()
+                if self.swap == False:
+                    self.grid.swapHold()
+                    self.swap = True
+
 
 class TetrisPiece():
     def __init__(self, grid, pType = None):
