@@ -39,6 +39,7 @@ TPieceFrameCoord = { 1 : TPieceCoord[1] + np.array((1, 1.5)),     # I
                      6 : TPieceCoord[6] + np.array((1.5, 1)),     # J
                      7 : TPieceCoord[7] + np.array((1.5, 2)) }    # T
 
+# Class managing User Input to comunicate with the Grid and Active Piece
 class TPieceControler():
     def __init__(self, grid, tPiece = None):
         self.leftHeld = False
@@ -57,10 +58,12 @@ class TPieceControler():
         self.grid = grid
         self.tPiece = tPiece
 
+    # Change activePiece to control
     def changePiece(self,tPiece):
         self.tPiece = tPiece
         self.swap = False
 
+    # Perform tasks based on user input
     def recieveInput(self):
         if self.tPiece is not None:
             key = pygame.key.get_pressed()
@@ -120,6 +123,7 @@ class TPieceControler():
                     self.swap = True
 
 
+# Class representing an active Tetris Piece
 class TetrisPiece():
     def __init__(self, grid, pType = None):
         if pType is None:
@@ -139,6 +143,7 @@ class TetrisPiece():
 
         self.readyToPlace = False
 
+    # Calculate coordinate for a ghost visualization of the piece at the lowest y co-ordinate
     def calcGhostPiece(self):
         x, y = self.center
         while 1:
@@ -148,6 +153,8 @@ class TetrisPiece():
                     return (x, y + 1)
             y -= 1
         
+    # Move the active piece by the given direction
+    # direction is a 2d-tuple representing how much to move in x and y
     def movePiece(self, direction):
         height = self.grid.height
         width = self.grid.width
@@ -175,6 +182,7 @@ class TetrisPiece():
             else:
                 self.readyToPlace = True
 
+    # Rotates active piece
     def rotate(self):
         for i in range(0, 4):
             x, y = self.blocks[i]
@@ -184,6 +192,7 @@ class TetrisPiece():
         self.ghostCenter = self.calcGhostPiece()
         self.readyToPlace = False
 
+    # Keep the active piece within the boundaries of the grid.
     def enclose(self, center = None):
         xMax = None
         xMin = None
@@ -222,6 +231,7 @@ class TetrisPiece():
         return (x, y)
 
 
+    # Draw the Active piece and it's ghost image
     def draw(self, screen):
         piece = self.center + self.blocks
         ghostPiece = self.ghostCenter + self.blocks
@@ -232,6 +242,7 @@ class TetrisPiece():
         for block in piece:
             self.grid.drawBlock(screen, block[0], block[1], self.type)
 
+# Class representing the grid which Tetris is played on
 class TetrisGrid():
     def __init__(self, screen):
         self.size = 20
@@ -251,11 +262,13 @@ class TetrisGrid():
         self.xOffset = (screenWidth - self.width * self.size) / 2
         self.yOffset = (screenHeight - self.height * self.size) / 2
 
+    # Pop of the next Queued piece and add to the Queue
     def nextPiece(self):
         self.activePiece = TetrisPiece(self, self.pieceQueue.popleft())
         self.pieceQueue.append(randint(1, 7))
         self.controller.changePiece(self.activePiece)
 
+    # Switch the active piece with the held piece
     def swapHold(self):
         self.activePiece, self.heldPiece = TetrisPiece(self, self.heldPiece), self.activePiece.type
         if self.activePiece is None:
@@ -263,6 +276,7 @@ class TetrisGrid():
         else:
             self.controller.changePiece(self.activePiece) # This is a smell
 
+    # Store the piece coordinates into the grid and prepare the next piece
     def placePiece(self):
         blocks = self.activePiece.center + self.activePiece.blocks
         cellCol = self.activePiece.type
@@ -280,11 +294,9 @@ class TetrisGrid():
             self.cells[y][x] = cellCol
 
         self.clearFullRows()
-
-        #self.activePiece = TetrisPiece(self)
-        #self.controller.changePiece(self.activePiece)
         self.nextPiece()
 
+    # Check for filled rows and clears them
     def clearFullRows(self):
         y = 0
         topHeight = len(self.cells)
@@ -301,6 +313,7 @@ class TetrisGrid():
             else:
                 y += 1
 
+    # Return true if the block overlaps with any blocks in the grid
     def blockOverlap(self, block):
         topHeight = len(self.cells)
         x, y = block
@@ -310,14 +323,17 @@ class TetrisGrid():
             return True
         return False
 
+    # update state of the grid
     def update(self, gameTick = False):
         self.controller.recieveInput()
         if gameTick:
             self.activePiece.movePiece((0, -1))
 
+    # Calculates the screen pixel coordinate of a grid x, y coordinate
     def realCoord(self, x, y):
         return (x * self.size + self.xOffset, y * self.size + self.yOffset)
 
+    # Draw the grid
     def drawGrid(self, screen):
         # Main Grid
         for y in range(0, self.height + 1):
@@ -335,6 +351,7 @@ class TetrisGrid():
             queueFrame = pygame.rect.Rect(self.realCoord(self.width + 1, 4 * i), (frameSize, frameSize))
             pygame.draw.rect(screen, Black, queueFrame, 1)
 
+    # Draw blocks in the grid
     def drawBlocks(self, screen):
         h = 0
         cut = len(self.cells)
@@ -347,18 +364,24 @@ class TetrisGrid():
                     self.drawBlock(screen, x, h, 0)
             h += 1
 
+    # Draws a single block given coordinates:
+    # x, h are the cordinates of the block in the grid
+    # col represents the colour of the block
     def drawBlock(self, screen, x, h, col):
         y = self.height - h - 1
         block = pygame.rect.Rect(self.realCoord(x, y),(self.size, self.size))
         pygame.draw.rect(screen, Colour[col], block, 0)
         pygame.draw.rect(screen, Black, block, 1)
 
+    # Draw a piece that is displayed in one of the "picture frames"
+    # A picture frame displays either the held piece or the queued pieces
     def drawFramePiece(self, screen, leftCorner, pType):
         framePiece = TPieceFrameCoord[pType] + leftCorner
         for block in framePiece:
             x, y = block
             self.drawBlock(screen, x, y, pType)
 
+    # Draw the pieces in the picture frames: Held and Queued pieces
     def drawQueuedPieces(self, screen):
         frameTop = self.height - 4
         # Draw Held Piece
@@ -369,6 +392,7 @@ class TetrisGrid():
         for i, pType in enumerate(self.pieceQueue):
             self.drawFramePiece(screen, (self.width + 1, frameTop - 4 * i), pType)
 
+    # Draw contents of the grid
     def draw(self, screen):
         self.drawBlocks(screen)
         self.activePiece.draw(screen)
@@ -377,15 +401,18 @@ class TetrisGrid():
 
         self.drawGrid(screen)
 
+# Class representing the tetris game
 class Game(object):
     def draw(self, screen):
         screen.fill((200, 200, 200))
         self.grid.draw(screen)
         pygame.display.flip()
 
+    # update the state of the game
     def update(self, gameTick = False):
         self.grid.update(gameTick)
         
+    # Main function that executes the game
     def main(self, screen):
         self.grid = TetrisGrid(screen)
         gameSpeed = 15
