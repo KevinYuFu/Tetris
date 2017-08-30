@@ -58,28 +58,28 @@ class TPieceControler():
     def recieveInput(self):
         if self.tPiece is not None:
             key = pygame.key.get_pressed()
-            if key[pygame.K_LEFT]:
+            if key[pygame.K_LEFT] or key[pygame.K_h]:
                 if self.leftHeld == False:
                     self.tPiece.movePiece((-1, 0))
                     self.leftHeld = True
             else:
                 self.leftHeld = False
 
-            if key[pygame.K_RIGHT]:
+            if key[pygame.K_RIGHT] or key[pygame.K_l]:
                 if self.rightHeld == False:
                     self.tPiece.movePiece((1, 0))
                     self.rightHeld = True
             else:
                 self.rightHeld = False
 
-            if key[pygame.K_UP]:
+            if key[pygame.K_UP] or key[pygame.K_k]:
                 if self.upHeld == False:
                     self.tPiece.rotate()
                     self.upHeld = True
             else:
                 self.upHeld = False
 
-            if key[pygame.K_DOWN]:
+            if key[pygame.K_DOWN] or key[pygame.K_j]:
                 if self.downHeld == False:
                     self.tPiece.movePiece((0, -1))
                     self.downHeld = True
@@ -333,23 +333,23 @@ class TetrisGrid():
         y = self.height - h - 1
         block = pygame.rect.Rect(self.realCoord(x, y),(self.size, self.size))
         pygame.draw.rect(screen, Colour[col], block, 0)
+        pygame.draw.rect(screen, Black, block, 1)
 
     def drawFramePiece(self, screen, leftCorner, pType):
         framePiece = TPieceFrameCoord[pType] + leftCorner
         for block in framePiece:
             x, y = block
-            blockRect = pygame.rect.Rect(self.realCoord(x, y), (self.size, self.size))
-            pygame.draw.rect(screen, Colour[pType], blockRect, 0)
-            pygame.draw.rect(screen, Black, blockRect, 1)
+            self.drawBlock(screen, x, y, pType)
 
     def drawQueuedPieces(self, screen):
+        frameTop = self.height - 4
         # Draw Held Piece
         if self.heldPiece is not None:
-            self.drawFramePiece(screen, (-5, 0), self.heldPiece)
+            self.drawFramePiece(screen, (-5, frameTop), self.heldPiece)
 
         # Draw Queue
         for i, pType in enumerate(self.pieceQueue):
-            self.drawFramePiece(screen, (self.width + 1, 4 * i), pType)
+            self.drawFramePiece(screen, (self.width + 1, frameTop - 4 * i), pType)
 
     def draw(self, screen):
         self.drawBlocks(screen)
