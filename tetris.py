@@ -304,14 +304,11 @@ class TetrisGrid():
             delete = True
             for n in self.cells[y]:
                 if n == 0:
-                    delete = False
+                    y += 1
                     break
-
-            if delete:
-               del self.cells[y] 
-               topHeight -= 1
             else:
-                y += 1
+                del self.cells[y] 
+                topHeight -= 1
 
     # Return true if the block overlaps with any blocks in the grid
     def blockOverlap(self, block):
