@@ -48,6 +48,12 @@ class TPieceControler():
         self.spaceHeld = False
         self.cHeld = False
         self.swap = False
+
+        self.heldCounter = 5
+        self.heldSpeed = 2
+        self.leftHeldCount = self.heldCounter
+        self.rightHeldCount = self.heldCounter
+
         self.grid = grid
         self.tPiece = tPiece
 
@@ -62,15 +68,27 @@ class TPieceControler():
                 if self.leftHeld == False:
                     self.tPiece.movePiece((-1, 0))
                     self.leftHeld = True
+                elif self.leftHeldCount == 0:
+                    self.tPiece.movePiece((-1, 0))
+                    self.leftHeldCount = self.heldSpeed
+                else:
+                    self.leftHeldCount -= 1
             else:
                 self.leftHeld = False
+                self.leftHeldCount = self.heldCounter
 
             if key[pygame.K_RIGHT] or key[pygame.K_l]:
                 if self.rightHeld == False:
                     self.tPiece.movePiece((1, 0))
                     self.rightHeld = True
+                elif self.rightHeldCount == 0:
+                    self.tPiece.movePiece((1, 0))
+                    self.rightHeldCount = self.heldSpeed
+                else:
+                    self.rightHeldCount -= 1
             else:
                 self.rightHeld = False
+                self.rightHeldCount = self.heldCounter
 
             if key[pygame.K_UP] or key[pygame.K_k]:
                 if self.upHeld == False:
