@@ -49,7 +49,6 @@ class TPieceControler():
         self.spaceHeld = False
         self.cHeld = False
         self.swap = False
-        self.readyToPlace = False
 
         self.heldCounter = 5
         self.heldSpeed = 2
@@ -103,12 +102,7 @@ class TPieceControler():
 
             if key[pygame.K_DOWN] or key[pygame.K_j]:
                 if self.downHeld == False:
-                    success = self.tPiece.movePiece((0, -1))
-                    if not success:
-                        if self.readyToPlace:
-                            self.game.placePiece()
-                        else:
-                            self.readyToPlace = True
+                    self.tPiece.movePiece((0, -1))
                     self.downHeld = True
                 else:
                     self.downHeld = False
@@ -146,8 +140,6 @@ class TetrisPiece():
 
         self.blocks = np.asarray(TPieceCoord[self.type])
         self.ghostCenter = self.calcGhostPiece()
-
-        self.readyToPlace = False
 
     # Calculate coordinate for a ghost visualization of the piece at the lowest y co-ordinate
     def calcGhostPiece(self):
@@ -195,7 +187,6 @@ class TetrisPiece():
         fix = self.enclose()
         self.center -= fix
         self.ghostCenter = self.calcGhostPiece()
-        self.readyToPlace = False
 
     # Keep the active piece within the boundaries of the grid.
     def enclose(self, center = None):
@@ -382,10 +373,13 @@ class Game(object):
         pygame.display.flip()
 
     # update the state of the game
-    def update(self, gameTick = False):
+    def update(self):
         self.controller.recieveInput()
-        if gameTick:
-            self.activePiece.movePiece((0, -1))
+        if self.gameTick == 0:
+            if not self.activePiece.movePiece((0, -1)):
+                self.placePiece()
+            self.gameTick = self.gameSpeed
+
 
     # Pop of the next Queued piece and add to the Queue
     def nextPiece(self):
@@ -422,8 +416,9 @@ class Game(object):
             self.pieceQueue.append(randint(1, 7))
         self.nextPiece()
 
-        gameSpeed = 15
-        gameTick = gameSpeed
+        self.gameSpeed = 15
+        self.gameTick = self.gameSpeed
+        self.readyToPlace = False
 
         while 1:
             clock = pygame.time.Clock()
@@ -435,13 +430,8 @@ class Game(object):
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                     return
             self.draw(screen)
-            if gameTick == 0:
-                self.update(True)
-                gameTick = gameSpeed
-            else:
-                self.update()
-
-            gameTick -= 1
+            self.update()
+            self.gameTick -= 1
 
 if __name__ == '__main__':
     pygame.init()
