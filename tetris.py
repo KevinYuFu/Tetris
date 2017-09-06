@@ -41,7 +41,7 @@ TPieceFrameCoord = { 1 : TPieceCoord[1] + np.array((1, 1.5)),     # I
 
 # Class managing User Input to comunicate with the Grid and Active Piece
 class TPieceControler():
-    def __init__(self, grid, tPiece = None):
+    def __init__(self, game, tPiece = None):
         self.leftHeld = False
         self.rightHeld = False
         self.upHeld = False
@@ -49,13 +49,14 @@ class TPieceControler():
         self.spaceHeld = False
         self.cHeld = False
         self.swap = False
+        self.readyToPlace = False
 
         self.heldCounter = 5
         self.heldSpeed = 2
         self.leftHeldCount = self.heldCounter
         self.rightHeldCount = self.heldCounter
 
-        self.grid = grid
+        self.game = game
         self.tPiece = tPiece
 
     # Change activePiece to control
@@ -102,7 +103,12 @@ class TPieceControler():
 
             if key[pygame.K_DOWN] or key[pygame.K_j]:
                 if self.downHeld == False:
-                    self.tPiece.movePiece((0, -1))
+                    success = self.tPiece.movePiece((0, -1))
+                    if not success:
+                        if self.readyToPlace:
+                            self.game.placePiece()
+                        else:
+                            self.readyToPlace = True
                     self.downHeld = True
                 else:
                     self.downHeld = False
@@ -112,14 +118,14 @@ class TPieceControler():
             if key[pygame.K_SPACE]:
                 if self.spaceHeld == False:
                     self.tPiece.center = self.tPiece.ghostCenter
-                    self.tPiece.grid.placePiece()
+                    self.game.placePiece()
                     self.spaceHeld = True
             else:
                 self.spaceHeld = False
 
             if key[pygame.K_c]:
                 if self.swap == False:
-                    self.grid.swapHold()
+                    self.game.swapHold()
                     self.swap = True
 
 
@@ -155,6 +161,7 @@ class TetrisPiece():
         
     # Move the active piece by the given direction
     # direction is a 2d-tuple representing how much to move in x and y
+    # Returns True when piece successfully moved. Otherwise returns False
     def movePiece(self, direction):
         height = self.grid.height
         width = self.grid.width
@@ -176,11 +183,9 @@ class TetrisPiece():
         if validPosition:
             self.center = tempCenter
             self.ghostCenter = self.calcGhostPiece()
-        elif direction == (0, -1):
-            if self.readyToPlace:
-                self.grid.placePiece()
-            else:
-                self.readyToPlace = True
+            return True
+        else:
+            return False
 
     # Rotates active piece
     def rotate(self):
@@ -250,36 +255,12 @@ class TetrisGrid():
         self.width = 10
         self.cells = []
 
-        self.controller = TPieceControler(self)
-
-        self.heldPiece = None
-        self.pieceQueue = deque()
-        for i in range(5):
-            self.pieceQueue.append(randint(1, 7))
-        self.nextPiece()
-
         screenWidth, screenHeight = pygame.display.get_surface().get_size()
         self.xOffset = (screenWidth - self.width * self.size) / 2
         self.yOffset = (screenHeight - self.height * self.size) / 2
 
-    # Pop of the next Queued piece and add to the Queue
-    def nextPiece(self):
-        self.activePiece = TetrisPiece(self, self.pieceQueue.popleft())
-        self.pieceQueue.append(randint(1, 7))
-        self.controller.changePiece(self.activePiece)
-
-    # Switch the active piece with the held piece
-    def swapHold(self):
-        self.activePiece, self.heldPiece = TetrisPiece(self, self.heldPiece), self.activePiece.type
-        if self.activePiece is None:
-            self.activePiece = self.nextPiece()
-        else:
-            self.controller.changePiece(self.activePiece) # This is a smell
-
-    # Store the piece coordinates into the grid and prepare the next piece
-    def placePiece(self):
-        blocks = self.activePiece.center + self.activePiece.blocks
-        cellCol = self.activePiece.type
+    # Store the piece coordinates into the grid and remove any complete rows
+    def placePiece(self, blocks, col):
         topHeight = len(self.cells)
 
         for block in blocks:
@@ -291,13 +272,12 @@ class TetrisGrid():
                 for i in range(0, extraHeight):
                     self.cells.append(np.zeros(self.width, dtype = np.int))
 
-            self.cells[y][x] = cellCol
+            self.cells[y][x] = col 
 
-        self.clearFullRows()
-        self.nextPiece()
+        self.clearCompleteRows()
 
     # Check for filled rows and clears them
-    def clearFullRows(self):
+    def clearCompleteRows(self):
         y = 0
         topHeight = len(self.cells)
         while y < topHeight:
@@ -319,12 +299,6 @@ class TetrisGrid():
         if y < topHeight and self.cells[y][x] != 0:
             return True
         return False
-
-    # update state of the grid
-    def update(self, gameTick = False):
-        self.controller.recieveInput()
-        if gameTick:
-            self.activePiece.movePiece((0, -1))
 
     # Calculates the screen pixel coordinate of a grid x, y coordinate
     def realCoord(self, x, y):
@@ -378,40 +352,76 @@ class TetrisGrid():
             x, y = block
             self.drawBlock(screen, x, y, pType)
 
-    # Draw the pieces in the picture frames: Held and Queued pieces
-    def drawQueuedPieces(self, screen):
+    # Draw the pieces in the picture frames: Held
+    def drawHeldPiece(self, screen, heldPiece):
         frameTop = self.height - 4
         # Draw Held Piece
-        if self.heldPiece is not None:
-            self.drawFramePiece(screen, (-5, frameTop), self.heldPiece)
+        if heldPiece is not None:
+            self.drawFramePiece(screen, (-5, frameTop), heldPiece)
 
+    # Draw the pieces in the picture frames: Queued pieces
+    def drawQueuedPieces(self, screen, pieceQueue):
+        frameTop = self.height - 4
         # Draw Queue
-        for i, pType in enumerate(self.pieceQueue):
+        for i, pType in enumerate(pieceQueue):
             self.drawFramePiece(screen, (self.width + 1, frameTop - 4 * i), pType)
 
     # Draw contents of the grid
     def draw(self, screen):
         self.drawBlocks(screen)
-        self.activePiece.draw(screen)
-
-        self.drawQueuedPieces(screen)
-
         self.drawGrid(screen)
 
 # Class representing the tetris game
 class Game(object):
     def draw(self, screen):
         screen.fill((200, 200, 200))
+        self.grid.drawHeldPiece(screen, self.heldPiece)
+        self.grid.drawQueuedPieces(screen, self.pieceQueue)
         self.grid.draw(screen)
+        self.activePiece.draw(screen)
         pygame.display.flip()
 
     # update the state of the game
     def update(self, gameTick = False):
-        self.grid.update(gameTick)
-        
+        self.controller.recieveInput()
+        if gameTick:
+            self.activePiece.movePiece((0, -1))
+
+    # Pop of the next Queued piece and add to the Queue
+    def nextPiece(self):
+        self.activePiece = TetrisPiece(self.grid, self.pieceQueue.popleft())
+        self.pieceQueue.append(randint(1, 7))
+        self.controller.changePiece(self.activePiece)
+
+    # Switch the active piece with the held piece
+    def swapHold(self):
+        self.activePiece, self.heldPiece = TetrisPiece(self.grid, self.heldPiece), self.activePiece.type
+        if self.activePiece is None:
+            self.activePiece = self.nextPiece()
+        else:
+            self.controller.changePiece(self.activePiece) # This is a smell
+
+    # Send active piece data to the grid to be stored and prepare the next piece
+    def placePiece(self):
+        blocks = self.activePiece.center + self.activePiece.blocks
+        cellCol = self.activePiece.type
+
+        self.grid.placePiece(blocks, cellCol)
+
+        self.nextPiece()
+
     # Main function that executes the game
     def main(self, screen):
+        # Setup grid and controler object
         self.grid = TetrisGrid(screen)
+        self.controller = TPieceControler(self)
+
+        self.heldPiece = None
+        self.pieceQueue = deque()
+        for i in range(5):
+            self.pieceQueue.append(randint(1, 7))
+        self.nextPiece()
+
         gameSpeed = 15
         gameTick = gameSpeed
 
