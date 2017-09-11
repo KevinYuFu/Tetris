@@ -141,6 +141,10 @@ class TetrisPiece():
         self.blocks = np.asarray(TPieceCoord[self.type])
         self.ghostCenter = self.calcGhostPiece()
 
+    # Return coordnates of the blocks on a grid
+    def blockCoord(self):
+        return self.center + self.blocks
+
     # Calculate coordinate for a ghost visualization of the piece at the lowest y co-ordinate
     def calcGhostPiece(self):
         x, y = self.center
@@ -165,17 +169,17 @@ class TetrisPiece():
     # Rotates active piece
     def rotate(self):
         if self.type == 2: return
-        #tempBlocks = np.array([np.array(y, -x) for x, y in self.blocks])
         tempBlocks = np.array(self.blocks)
         for i in range(0, 4):
-            x, y = tempBlocks[i]
-            tempBlocks[i] = np.array([y, -x])
+            x, y = self.blocks[i]
+            self.blocks[i] = np.array([y, -x])
 
-        fix = self.grid.fitRotatedPiece(self.center + tempBlocks)
+        fix = self.grid.fitRotatedPiece(self)
         if fix:
             self.center += fix
-            self.blocks = tempBlocks
             self.ghostCenter = self.calcGhostPiece()
+        else:
+            self.blocks = tempBlocks
 
 
     # Draw the Active piece and it's ghost image
@@ -250,14 +254,15 @@ class TetrisGrid():
 
     # Search for fix on piece position after a rotation
     def fitRotatedPiece(self, piece):
+        blocks = piece.blockCoord()
         for i in range(3):
-            for j in range(2):
-                if j: w = i
-                else: w = -i
+            for w in (i, -i):
                 for h in range(2):
-                    if self.validPieceLocation(piece + np.asarray((w, h))):
+                    if self.validPieceLocation(blocks + np.asarray((w, h))):
                         return (w, h)
-        print("Failed to Rotate")
+                if (0, -2) in piece.blocks:
+                    if self.validPieceLocation(blocks + np.asarray((w, 2))):
+                        return (w, 2)
         return False
 
     # Calculates the screen pixel coordinate of a grid x, y coordinate
