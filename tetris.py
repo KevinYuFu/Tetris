@@ -50,7 +50,7 @@ class TPieceControler():
         self.cHeld = False
         self.swap = False
 
-        self.heldCounter = 5
+        self.heldCounter = 3
         self.heldSpeed = 2
         self.leftHeldCount = self.heldCounter
         self.rightHeldCount = self.heldCounter
@@ -146,33 +146,16 @@ class TetrisPiece():
         x, y = self.center
         while 1:
             tempGhost = self.blocks + (x, y)
-            for block in tempGhost:
-                if self.grid.blockOverlap(block):
-                    return (x, y + 1)
+            if not self.grid.validPieceLocation(tempGhost):
+                return (x, y + 1)
             y -= 1
-        
+
     # Move the active piece by the given direction
     # direction is a 2d-tuple representing how much to move in x and y
     # Returns True when piece successfully moved. Otherwise returns False
     def movePiece(self, direction):
-        height = self.grid.height
-        width = self.grid.width
-
         tempCenter = self.center + direction
-
-        fix = self.enclose(tempCenter)
-        tempBlocks = tempCenter + self.blocks
-
-        validPosition = True
-        if fix == (0, 0):
-            for block in tempBlocks:
-                if  self.grid.blockOverlap(block):
-                    validPosition = False
-                    break
-        else:
-            validPosition = False
-
-        if validPosition:
+        if self.grid.validPieceLocation(tempCenter + self.blocks):
             self.center = tempCenter
             self.ghostCenter = self.calcGhostPiece()
             return True
@@ -181,50 +164,18 @@ class TetrisPiece():
 
     # Rotates active piece
     def rotate(self):
+        if self.type == 2: return
+        #tempBlocks = np.array([np.array(y, -x) for x, y in self.blocks])
+        tempBlocks = np.array(self.blocks)
         for i in range(0, 4):
-            x, y = self.blocks[i]
-            self.blocks[i] = np.array([y, -x])
-        fix = self.enclose()
-        self.center -= fix
-        self.ghostCenter = self.calcGhostPiece()
+            x, y = tempBlocks[i]
+            tempBlocks[i] = np.array([y, -x])
 
-    # Keep the active piece within the boundaries of the grid.
-    def enclose(self, center = None):
-        xMax = None
-        xMin = None
-        yMax = None
-        yMin = None
-        if center is None:
-            center = self.center
-        piece = self.blocks + center
-        for block in piece:
-            if xMax is None:
-                xMax = block[0]
-                xMin = block[0]
-                yMax = block[1]
-                yMin = block[1]
-            else:
-                if block[0] > xMax:
-                    xMax = block[0]
-                elif block[0] < xMin:
-                    xMin = block[0]
-                if block[1] > yMax:
-                    yMax = block[1]
-                elif block[1] < yMin:
-                    yMin = block[1]
-        if xMax >= self.grid.width:
-            x = xMax - self.grid.width + 1
-        elif xMin < 0:
-            x = xMin
-        else:
-            x = 0
-        if yMax >= self.grid.height:
-            y = yMax - self.grid.height + 1
-        elif yMin < 0:
-            y = yMin
-        else:
-            y = 0
-        return (x, y)
+        fix = self.grid.fitRotatedPiece(self.center + tempBlocks)
+        if fix:
+            self.center += fix
+            self.blocks = tempBlocks
+            self.ghostCenter = self.calcGhostPiece()
 
 
     # Draw the Active piece and it's ghost image
@@ -281,14 +232,32 @@ class TetrisGrid():
                 del self.cells[y] 
                 topHeight -= 1
 
-    # Return true if the block overlaps with any blocks in the grid
-    def blockOverlap(self, block):
+    # Check if coordinates are out of bound
+    # returns coordinates representing the offset
+    def outOfRange(self, x, y):
+        return x < 0 or y < 0 or x >= self.width or y >= self.height
+
+    # Check if a piece fits on the grid
+    def validPieceLocation(self, blocks):
         topHeight = len(self.cells)
-        x, y = block
-        if y < 0:
-            return True
-        if y < topHeight and self.cells[y][x] != 0:
-            return True
+        for block in blocks:
+            x, y = block
+            if self.outOfRange(x, y):
+                return False
+            if y < topHeight and self.cells[y][x] != 0:
+                return False
+        return True
+
+    # Search for fix on piece position after a rotation
+    def fitRotatedPiece(self, piece):
+        for i in range(3):
+            for j in range(2):
+                if j: w = i
+                else: w = -i
+                for h in range(2):
+                    if self.validPieceLocation(piece + np.asarray((w, h))):
+                        return (w, h)
+        print("Failed to Rotate")
         return False
 
     # Calculates the screen pixel coordinate of a grid x, y coordinate
@@ -389,10 +358,12 @@ class Game(object):
 
     # Switch the active piece with the held piece
     def swapHold(self):
-        self.activePiece, self.heldPiece = TetrisPiece(self.grid, self.heldPiece), self.activePiece.type
-        if self.activePiece is None:
-            self.activePiece = self.nextPiece()
+        if self.heldPiece is None:
+            self.heldPiece = self.activePiece.type
+            self.nextPiece()
+            self.controller.changePiece(self.activePiece) # This is a smell
         else:
+            self.activePiece, self.heldPiece = TetrisPiece(self.grid, self.heldPiece), self.activePiece.type
             self.controller.changePiece(self.activePiece) # This is a smell
 
     # Send active piece data to the grid to be stored and prepare the next piece
